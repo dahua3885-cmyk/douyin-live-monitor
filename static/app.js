@@ -138,7 +138,8 @@
     $('record-heading').textContent='全局录像设置';
     $('record-status').textContent=!model.connected?'服务未连接，暂时无法保存设置。':`已开启录像 ${enabled} 个账号 · 正在录制 ${writing} 个${failures?' · 异常 '+failures+' 个':''}。在直播间列表中单独开关录像。`;
     $('change-record-folder').disabled=!model.connected;
-    $('record-folder-label').textContent=model.state?.settings?.recordings_dir?`统一保存到：${model.state.settings.recordings_dir}`:'首次录制前选择一次保存文件夹，所有账号共用。';
+    const folderDraft=window.LiveMonitor?.recordingFolderDraft;
+    $('record-folder-label').textContent=folderDraft?`待保存：${folderDraft}`:model.state?.settings?.recordings_dir?`统一保存到：${model.state.settings.recordings_dir}`:'首次录制前选择一次保存文件夹，所有账号共用。';
     const save=$('record-settings-form').querySelector('button[type="submit"]');save.disabled=!model.connected||$('record-settings-form').dataset.saving==='true';
     window.dispatchEvent(new Event('live-monitor-settings'));
   }
@@ -595,18 +596,16 @@
     } catch (error) { toast(error.message, true); }
     finally { button.disabled = !model.connected; }
   });
-  let recordPending = null;
-  function openRecordFolder(roomId = null) {
-    recordPending = roomId;
-    $('record-folder-path').value = model.state?.settings?.recordings_dir || '';
+  function openRecordFolder() {
+    $('record-folder-path').value = window.LiveMonitor?.recordingFolderDraft || model.state?.settings?.recordings_dir || '';
     $('record-folder-error').textContent = '';
-    $('save-record-folder').textContent = roomId ? '保存并开启录制' : '保存文件夹';
+    $('save-record-folder').textContent = $('record-settings-dialog').open ? '使用此文件夹' : '保存文件夹';
     $('record-folder-dialog').showModal();
   }
   $('change-record-folder').addEventListener('click', () => openRecordFolder());
   async function toggleRecording(room,button) {
     if (!room) return;
-    if (!room.record_enabled && !model.state?.settings?.recordings_dir) { openRecordFolder(room.id); return; }
+    if (!room.record_enabled && !model.state?.settings?.recordings_dir) { window.LiveMonitor.openRecordingSettings(room.id); return; }
     try { await mutate(`/api/rooms/${encodeURIComponent(room.id)}`, {method:'PATCH',body:room.record_enabled ? {record_enabled:false} : {record_enabled:true,enabled:true}}, room.record_enabled ? '已关闭视频录制，已有视频保留。' : '自动录制已开启，收到直播画面后开始保存。', button); } catch (_) { }
   }
   $('browse-record-folder').addEventListener('click', async () => {
@@ -620,9 +619,15 @@
     event.preventDefault(); if (!$('record-folder-form').reportValidity()) return;
     const button = $('save-record-folder'); button.disabled = true;
     try {
-      await request('/api/recording-folder', {method:'POST',body:{path:$('record-folder-path').value.trim()}});
-      if (recordPending) await request(`/api/rooms/${encodeURIComponent(recordPending)}`, {method:'PATCH',body:{record_enabled:true,enabled:true}});
-      $('record-folder-dialog').close(); await syncState(); toast(recordPending ? '文件夹已保存，自动录制已开启。' : '保存文件夹已更新。'); recordPending = null;
+      const path=$('record-folder-path').value.trim();
+      if ($('record-settings-dialog').open) {
+        window.LiveMonitor.recordingFolderDraft=path;
+        $('record-settings-form').dataset.dirty='true';
+        $('record-settings-error').textContent='文件夹已选择，请保存录像设置后生效。';
+        $('record-folder-dialog').close();renderGlobalRecording();return;
+      }
+      await request('/api/recording-folder', {method:'POST',body:{path}});
+      $('record-folder-dialog').close(); await syncState(); toast('保存文件夹已更新。');
     } catch (error) { $('record-folder-error').textContent = error.message; }
     finally { button.disabled = false; }
   });
