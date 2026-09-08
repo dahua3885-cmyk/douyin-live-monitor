@@ -113,10 +113,12 @@ def register_features(app,store,archive,media,recorder,speech,monitor,notifier,f
         if len(query)>100:raise ValueError('搜索词最多 100 个字符')
         return web.json_response({'items':archive.speech(request.match_info['sid'],query)})
 
-    async def analyze(request):return web.json_response(archive.analyze(request.match_info['sid']))
+    async def analyze(request):return web.json_response(archive.analysis(request.match_info['sid'])['result'])
+
+    async def analysis_get(request):return web.json_response(archive.analysis(request.match_info['sid']))
 
     async def analysis_export(request):
-        sid=request.match_info['sid'];result=archive.analyze(sid,save=False);info=archive.get(sid)
+        sid=request.match_info['sid'];result=archive.analysis(sid)['result'];info=archive.get(sid)
         lines=[f"# {info['name']}｜直播结构拆解",'',result['method'],result['notice'],'',f"采集开始：{info['first_seen']}",'']
         for item in result['timeline']:
             stamp=datetime.fromisoformat(item['captured_at']).astimezone().strftime('%Y-%m-%d %H:%M:%S')
@@ -165,6 +167,7 @@ def register_features(app,store,archive,media,recorder,speech,monitor,notifier,f
     app.router.add_get('/api/archives/{sid}',detail)
     app.router.add_get('/api/archives/{sid}/speech',search)
     app.router.add_post('/api/archives/{sid}/analyze',analyze)
+    app.router.add_get('/api/archives/{sid}/analysis',analysis_get)
     app.router.add_get('/api/archives/{sid}/analysis.md',analysis_export)
     app.router.add_get('/api/media/{mid}',media_file)
     app.router.add_post('/api/media/{mid}/retry',retry_media)

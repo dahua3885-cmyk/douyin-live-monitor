@@ -4,6 +4,8 @@ import asyncio
 import json
 import re
 import uuid
+import hashlib
+import time
 
 
 def now():
@@ -64,23 +66,40 @@ class Archive:
         self.store, self.db = store, store.db
         self.task=None
         self.closed=False
+        self.live_checks={}
         if 'ready_notified' not in {r[1] for r in self.db.execute('PRAGMA table_info(broadcasts)')}:
             self.db.execute('ALTER TABLE broadcasts ADD COLUMN ready_notified INTEGER NOT NULL DEFAULT 0')
             self.db.commit()
 
     def source_key(self,sid):
         if sid.startswith('history-'):
-            return json.dumps([self.source_key(i) for i in self.member_ids(sid)])
-        row=self.db.execute("SELECT COUNT(*),SUM(status='done'),MAX(id),MAX(completed_at),SUM(LENGTH(text)) FROM speech_chunks WHERE broadcast_id=?",(sid,)).fetchone()
-        return json.dumps(list(row))
+            return json.dumps([(i,self.source_key(i)) for i in self.member_ids(sid)])
+        rows=[list(r) for r in self.db.execute('SELECT id,status,text,captured_at,start_seconds,end_seconds FROM speech_chunks WHERE broadcast_id=? ORDER BY id',(sid,))]
+        media=[list(r) for r in self.db.execute('SELECT id,state,mp4_path,captured_at,duration FROM media_assets WHERE broadcast_id=? ORDER BY id',(sid,))]
+        return 'rules-v2:'+hashlib.sha256(json.dumps([rows,media],ensure_ascii=False).encode()).hexdigest()
+
+    def analysis(self,sid):
+        info=self.get(sid);key=self.source_key(sid)
+        saved=self.db.execute('SELECT source_key,result FROM archive_analyses WHERE broadcast_id=?',(sid,)).fetchone()
+        cached=bool(saved and saved['source_key']==key)
+        result=json.loads(saved['result']) if cached else self.analyze(sid)
+        ids=self.member_ids(sid) if sid.startswith('history-') else [sid]
+        pending=sum(self.db.execute("SELECT COUNT(*) FROM speech_chunks WHERE broadcast_id=? AND status IN ('pending','processing')",(i,)).fetchone()[0] for i in ids)
+        return {'result':result,'cached':cached,'is_live':info['state']=='live','pending_chunks':pending,'updated_at':result['created_at']}
 
     async def run(self):
         while not self.closed:
-            for row in self.db.execute("SELECT id,room_id,ready_notified FROM broadcasts WHERE state='ended' AND legacy=0").fetchall():
+            for row in self.db.execute("SELECT id,room_id,state,ready_notified FROM broadcasts WHERE state IN ('live','ended') AND legacy=0").fetchall():
                 sid=row['id']
+                if row['state']=='live':
+                    stamp=time.monotonic()
+                    if stamp-self.live_checks.get(sid,-1e9)<60:continue
+                    self.live_checks[sid]=stamp
+                    if self.db.execute("SELECT 1 FROM speech_chunks WHERE broadcast_id=? AND status='done' LIMIT 1",(sid,)).fetchone():self.analysis(sid)
+                    continue
                 waiting=self.db.execute("SELECT 1 FROM speech_chunks WHERE broadcast_id=? AND status IN ('pending','processing') LIMIT 1",(sid,)).fetchone()
                 waiting=waiting or self.db.execute("SELECT 1 FROM media_assets WHERE broadcast_id=? AND state IN ('pending','converting') LIMIT 1",(sid,)).fetchone()
-                waiting=waiting or self.db.execute('SELECT 1 FROM recording_runs WHERE broadcast_id=? AND closed IN (0,2) LIMIT 1',(sid,)).fetchone()
+                waiting=waiting or self.db.execute('SELECT 1 FROM recording_runs WHERE broadcast_id=? AND closed IN (0,2,3) LIMIT 1',(sid,)).fetchone()
                 if waiting:continue
                 old=self.db.execute('SELECT source_key FROM archive_analyses WHERE broadcast_id=?',(sid,)).fetchone()
                 if not old or old[0]!=self.source_key(sid):self.analyze(sid)

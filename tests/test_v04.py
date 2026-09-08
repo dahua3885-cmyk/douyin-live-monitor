@@ -63,6 +63,23 @@ class ArchiveTests(unittest.TestCase):
             (self.room['id'],'a','a.wav',0,30,self.snap()['observed_at'],'done','今天刮了一阵风',sid));self.store.db.commit()
         self.assertEqual(self.archive.analyze(sid)['timeline'][0]['category'],'待人工判断')
 
+    def test_analysis_reuses_saved_result_and_detects_same_length_text_change(self):
+        sid=self.archive.on_observation(self.room,self.snap())
+        self.store.db.execute('INSERT INTO speech_chunks(room_id,session_id,audio_path,start_seconds,end_seconds,captured_at,status,text,broadcast_id) VALUES(?,?,?,?,?,?,?,?,?)',(self.room['id'],'a','a.wav',0,30,self.snap()['observed_at'],'done','欢迎大家',sid));self.store.db.commit()
+        with patch.object(self.archive,'analyze',wraps=self.archive.analyze) as build:
+            first=self.archive.analysis(sid);second=self.archive.analysis(sid)
+            self.assertFalse(first['cached']);self.assertTrue(second['cached']);self.assertEqual(build.call_count,1)
+            self.assertEqual(first['updated_at'],second['updated_at']);self.assertTrue(second['is_live'])
+            self.store.db.execute("UPDATE speech_chunks SET text='报名优惠' WHERE broadcast_id=?",(sid,));self.store.db.commit()
+            third=self.archive.analysis(sid)
+            self.assertFalse(third['cached']);self.assertEqual(build.call_count,2);self.assertEqual(third['result']['timeline'][0]['quote'],'报名优惠')
+
+    def test_empty_analysis_reports_pending_transcription(self):
+        sid=self.archive.on_observation(self.room,self.snap())
+        self.store.db.execute('INSERT INTO speech_chunks(room_id,session_id,audio_path,start_seconds,end_seconds,captured_at,status,text,broadcast_id) VALUES(?,?,?,?,?,?,?,?,?)',(self.room['id'],'a','a.wav',0,30,self.snap()['observed_at'],'pending','',sid));self.store.db.commit()
+        result=self.archive.analysis(sid)
+        self.assertEqual(result['pending_chunks'],1);self.assertEqual(result['result']['timeline'],[])
+
     def test_legacy_group_combines_reading_without_rewriting_original_sessions(self):
         for i,stamp in enumerate(['2026-09-07T12:00:00+00:00','2026-09-07T13:00:00+00:00']):
             self.store.db.execute('INSERT INTO speech_chunks(room_id,session_id,audio_path,start_seconds,end_seconds,captured_at,status,text) VALUES(?,?,?,?,?,?,?,?)',
@@ -114,6 +131,16 @@ class FeatureApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status,200);text=await response.text();self.assertNotIn('private-secret',text);self.assertNotIn('abcdefghijk',text);send.assert_not_awaited()
             self.assertEqual((await self.client.post('/api/push/test',json={})).status,200);send.assert_awaited_once()
         self.assertEqual((await self.client.post('/api/push',json={'enabled':True,'webhook':'http://127.0.0.1/','events':['live']})).status,400)
+
+    async def test_analysis_get_and_export_reuse_same_saved_result(self):
+        store=self.app['store'];room=store.add('https://live.douyin.com/123456789');sid=Archive(store).on_observation(room,{'status':'live','room_id':'1'})
+        response=await self.client.get('/api/archives/'+sid+'/analysis');self.assertEqual(response.status,200)
+        first=await response.json();self.assertFalse(first['cached'])
+        second=await(await self.client.get('/api/archives/'+sid+'/analysis')).json();self.assertTrue(second['cached'])
+        self.assertEqual((await self.client.get('/api/archives/'+sid+'/analysis.md')).status,200)
+        saved=store.db.execute('SELECT result FROM archive_analyses WHERE broadcast_id=?',(sid,)).fetchone()[0]
+        self.assertEqual(json.loads(saved)['created_at'],first['updated_at'])
+        self.assertEqual((await self.client.get('/api/archives/missing/analysis')).status,404)
 
     async def test_open_recordings_uses_persisted_media_after_restart(self):
         store=self.app['store'];room=store.add('https://live.douyin.com/123456789')

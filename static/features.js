@@ -90,7 +90,7 @@
     catch(error){$('bulk-settings-error').textContent=error.message;}finally{button.disabled=false;}
   });
 
-  let activeArchive=null,archiveItems=[],currentSpeech=[],archiveSequence=0;
+  let activeArchive=null,archiveItems=[],currentSpeech=[],archiveSequence=0,analysisSequence=0,lastAnalysisAt=0,lastAnalysisRendered='';
   async function loadArchives(){
     const id=$('archive-room-filter').value;
     const result=await L.request('/api/archives'+(id?`?room_id=${encodeURIComponent(id)}`:''));archiveItems=result.items;
@@ -112,22 +112,20 @@
     return `<svg viewBox="0 0 700 130" role="img" aria-label="本场在线人数采样点，空白处不补线"><path d="M10 15V115H690" stroke="#dce3d9" fill="none"/>${dots}</svg><p class="muted">仅展示实际采样点；悬停可查看时间与人数。</p>`;
   }
   async function showArchive(id){
+    lastAnalysisAt=0;lastAnalysisRendered='';analysisSequence++;
     activeArchive=id;document.querySelectorAll('[data-archive]').forEach(b=>b.classList.toggle('active',b.dataset.archive===id));const sequence=++archiveSequence;
     const data=await L.request(`/api/archives/${encodeURIComponent(id)}`);if(sequence!==archiveSequence)return;
     const media=data.media.map(m=>`<div class="archive-media"><span>${e(L.fullTime(m.captured_at))} · ${(m.duration/60).toFixed(1)} 分钟 · ${e(m.filename)}<small>${e(({ready:'MP4 已就绪',saved:'TS 已保存',pending:'等待生成 MP4',converting:'正在生成 MP4',error:'MP4 转换失败'})[m.state]||m.state)}${m.error?' · '+e(m.error):''}</small></span><div><button class="text-button" type="button" data-open-media-folder="${e(m.id)}">打开位置</button>${m.playable?`<button type="button" class="text-button" data-play-media="${e(m.id)}">播放</button><a class="text-button" href="/api/media/${e(m.id)}?download=1" download>MP4</a>`:''}${!m.playable?`<a class="text-button" href="/api/media/${e(m.id)}?original=1" download>下载录制原文件</a>`:''}${['saved','error'].includes(m.state)?`<button type="button" class="text-button" data-retry-media="${e(m.id)}">生成 / 重试 MP4</button>`:''}</div></div>`).join('');
     const stats=`<div class="archive-stats"><span>已存音频 <strong>${(data.speech_seconds/60).toFixed(1)} 分钟</strong></span><span>已归档录像 <strong>${(data.video_seconds/60).toFixed(1)} 分钟</strong></span><span>采样峰值在线 <strong>${data.peak?data.peak.online:'—'}</strong></span><span>采样平均在线 <strong>${data.observed_average_online??'—'}</strong></span></div>`;
     const gaps=`<details class="archive-gaps"><summary>采集中断 / 异常 ${data.gaps.length} 处</summary>${data.gaps.map(g=>`<p>${e(L.fullTime(g.started_at))} → ${g.ended_at?e(L.fullTime(g.ended_at)):'尚未确认恢复'}：${e(g.reason)}</p>`).join('')||'<p>没有记录到异常；不代表监控前的内容也已采集。</p>'}</details>`;
     const members=data.members?`<details class="archive-gaps"><summary>原始采音记录 ${data.members.length} 次（已合并阅读）</summary>${data.members.map(m=>`<p>${e(L.fullTime(m.first_seen))}—${e(L.fullTime(m.last_seen))}</p>`).join('')}</details>`:'';
-    $('archive-detail').innerHTML=`<div class="archive-title"><div><h3>${e(data.name)}</h3><p>${e(L.fullTime(data.first_seen))} 至 ${e(L.fullTime(data.last_seen))}</p></div><span class="count-tag">${data.legacy?'历史汇总':data.state==='ended'?'已结束':'最近检测在播'}</span></div>${data.legacy?'<p class="archive-context-note">同一主播当日的旧采音记录已合并阅读；原始记录和中断保留。历史资料不足以确认真实场次。</p>':''}<div class="archive-search"><input id="archive-search-input" type="search" placeholder="搜索话术：报名、课程、资料…" aria-label="搜索本场话术"><button id="archive-search-button" class="button secondary small" type="button">搜索话术</button><button id="analyze-archive" class="button primary small" type="button">生成结构拆解</button></div><nav class="archive-tabs" aria-label="历史内容"><button type="button" data-archive-tab="speech" class="active">话术全文</button><button type="button" data-archive-tab="video">录像回看</button><button type="button" data-archive-tab="data">人数与中断</button><button type="button" data-archive-tab="analysis">结构拆解</button></nav><div id="archive-player-zone" hidden><video id="archive-player" controls preload="metadata" hidden></video><audio id="archive-audio" controls preload="metadata" hidden></audio><p id="archive-play-note" class="muted"></p></div><section data-archive-panel="speech"><div id="archive-speech"></div></section><section data-archive-panel="video" hidden>${media||'<p class="archive-empty-note">这次记录只采集了话术，没有录像。以后开启列表中的录像开关即可保存视频。</p>'}</section><section data-archive-panel="data" hidden>${stats}<h4>人数走势</h4>${smallChart(data.points)}${gaps}${members}</section><section data-archive-panel="analysis" hidden><a class="text-button" href="/api/archives/${e(id)}/analysis.md" download>导出拆解</a><div id="archive-analysis"><p class="archive-empty-note">点击上方“生成结构拆解”，按时间查看内容讲解、互动、转化及对应原话。</p></div></section>`;
+    $('archive-detail').innerHTML=`<div class="archive-title"><div><h3>${e(data.name)}</h3><p>${e(L.fullTime(data.first_seen))} 至 ${e(L.fullTime(data.last_seen))}</p></div><span class="count-tag">${data.legacy?'历史汇总':data.state==='ended'?'已结束':'最近检测在播'}</span></div>${data.legacy?'<p class="archive-context-note">同一主播当日的旧采音记录已合并阅读；原始记录和中断保留。历史资料不足以确认真实场次。</p>':''}<div class="archive-search"><input id="archive-search-input" type="search" placeholder="搜索话术：报名、课程、资料…" aria-label="搜索本场话术"><button id="archive-search-button" class="button secondary small" type="button">搜索话术</button></div><nav class="archive-tabs" aria-label="历史内容"><button type="button" data-archive-tab="speech" class="active">话术全文</button><button type="button" data-archive-tab="video">录像回看</button><button type="button" data-archive-tab="data">人数与中断</button><button type="button" data-archive-tab="analysis">结构拆解</button></nav><div id="archive-player-zone" hidden><video id="archive-player" controls preload="metadata" hidden></video><audio id="archive-audio" controls preload="metadata" hidden></audio><p id="archive-play-note" class="muted"></p></div><section data-archive-panel="speech"><div id="archive-speech"></div></section><section data-archive-panel="video" hidden>${media||'<p class="archive-empty-note">这次记录只采集了话术，没有录像。以后开启列表中的录像开关即可保存视频。</p>'}</section><section data-archive-panel="data" hidden>${stats}<h4>人数走势</h4>${smallChart(data.points)}${gaps}${members}</section><section data-archive-panel="analysis" hidden><div class="analysis-status-bar"><p id="analysis-status" class="muted" role="status">正在读取拆解…</p><a id="export-analysis" class="text-button" href="/api/archives/${e(id)}/analysis.md" download hidden>导出拆解</a></div><div id="archive-analysis"><p class="archive-empty-note">自动读取已有结果；话术更新后自动补充，无需点击生成。</p></div></section>`;
     document.querySelectorAll('[data-archive-tab]').forEach(button=>button.addEventListener('click',()=>switchArchiveTab(button.dataset.archiveTab)));
     $('archive-player').addEventListener('error',()=>{$('archive-play-note').textContent='浏览器无法播放此编码，请下载 MP4 或原 TS 用本机播放器打开。';});
     $('archive-search-button').addEventListener('click',()=>loadSpeech().catch(error=>L.toast(error.message,true)));
     $('archive-search-input').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();loadSpeech().catch(error=>L.toast(error.message,true));}});
-    $('analyze-archive').addEventListener('click',async()=>{
-      switchArchiveTab('analysis');const button=$('analyze-archive');button.disabled=true;
-      try{const requested=activeArchive;const result=await L.request(`/api/archives/${encodeURIComponent(requested)}/analyze`,{method:'POST',body:{}});if(activeArchive===requested)renderAnalysis(result);}catch(error){L.toast(error.message,true);}finally{button.disabled=false;}
-    });
     await loadSpeech();
+    loadAnalysis().catch(()=>{});
   }
   async function loadSpeech(){
     const id=activeArchive,query=$('archive-search-input').value.trim();
@@ -138,7 +136,25 @@
   function switchArchiveTab(name){
     document.querySelectorAll('[data-archive-panel]').forEach(panel=>panel.hidden=panel.dataset.archivePanel!==name);
     document.querySelectorAll('[data-archive-tab]').forEach(button=>{button.classList.toggle('active',button.dataset.archiveTab===name);button.setAttribute('aria-pressed',String(button.dataset.archiveTab===name));});
+    if(name==='analysis'&&Date.now()-lastAnalysisAt>60000)loadAnalysis().catch(()=>{});
   }
+  async function loadAnalysis(){
+    const id=activeArchive,sequence=++analysisSequence;if(!id||!$('analysis-status'))return;
+    try{
+      const data=await L.request(`/api/archives/${encodeURIComponent(id)}/analysis`);
+      if(activeArchive!==id||sequence!==analysisSequence)return;
+      lastAnalysisAt=Date.now();
+      const available=data.result.timeline.length>0;
+      $('analysis-status').textContent=available?`${data.is_live?'直播中草稿 · 约每分钟自动更新':data.pending_chunks?'部分话术仍在转写，结果会继续补充':'已自动生成并保存'} · 更新于 ${L.fullTime(data.updated_at)} · 本地规则分析，无需大模型`:'等待话术完成识别，完成后会自动生成拆解。';
+      $('export-analysis').hidden=!available;
+      if(available&&lastAnalysisRendered!==data.updated_at){
+        const scroll=$('archive-analysis').querySelector('.analysis-timeline')?.scrollTop||0;
+        renderAnalysis(data.result);lastAnalysisRendered=data.updated_at;
+        const timeline=$('archive-analysis').querySelector('.analysis-timeline');if(timeline)timeline.scrollTop=scroll;
+      }else if(!available)$('archive-analysis').innerHTML='<p class="archive-empty-note">目前还没有识别完成的话术。开启话术转写后，已采集内容会自动整理到这里。</p>';
+    }catch(error){if(activeArchive===id&&sequence===analysisSequence)$('analysis-status').textContent=`暂时未能读取：${error.message}。稍后自动重试。`;}
+  }
+  setInterval(()=>{if($('archive-dialog').open&&!document.hidden&&activeArchive)loadAnalysis().catch(()=>{});},60000);
   function playMedia(id,offset=0){
     $('archive-player-zone').hidden=false;
     const player=$('archive-player'),audio=$('archive-audio');audio.pause();audio.hidden=true;player.hidden=false;
@@ -160,6 +176,7 @@
     const retry=event.target.closest('[data-retry-media]');if(retry){try{await L.request(`/api/media/${encodeURIComponent(retry.dataset.retryMedia)}/retry`,{method:'POST',body:{}});L.toast('已加入 MP4 生成队列。');await showArchive(activeArchive);}catch(error){L.toast(error.message,true);}}
   });
   $('archive-dialog').addEventListener('close',()=>{const video=$('archive-player'),audio=$('archive-audio');if(video){video.pause();video.removeAttribute('src');video.load();}if(audio){audio.pause();audio.removeAttribute('src');audio.load();}});
+  $('archive-dialog').addEventListener('close',()=>{analysisSequence++;});
   function renderAnalysis(result){
     $('archive-analysis').innerHTML=`<h4>直播结构拆解</h4><p class="room-warning">${e(result.method)}：${e(result.notice)}</p><div class="archive-stats">${Object.entries(result.seconds_by_category).map(([name,seconds])=>`<span>${e(name)}<strong>${(seconds/60).toFixed(1)} 分钟</strong></span>`).join('')}</div><h4>按时间查看结构与原话</h4><div class="analysis-timeline">${result.timeline.map(t=>`<article><div><strong>${e(t.category)}</strong><button class="text-button" type="button" data-play-speech="${t.speech_id}">${e(L.fullTime(t.captured_at))}</button></div><small>识别依据：${e(t.evidence_terms.join('、')||'证据不足，待人工判断')}${t.labels.length>1?' · 同时涉及 '+e(t.labels.join('、')):''}</small><p>${e(t.quote)}</p></article>`).join('')}</div><h4>重复话术</h4>${result.repeated_passages.map(r=>`<p>${r.occurrences.length} 次：${e(r.text)}</p>`).join('')||'<p class="muted">未找到跨片段重复的完整句子。</p>'}<h4>转化轮次候选 ${result.conversion_round_candidates.length} 处</h4>${result.conversion_round_candidates.map(r=>`<p><button type="button" class="text-button" data-play-speech="${r.speech_id}">${e(L.fullTime(r.captured_at))}</button> ${e(r.quote)}</p>`).join('')}<p class="muted">${e(result.limitations.join(' '))}</p>`;
     // Analysis references all speech, even if a search had narrowed the list.
