@@ -12,7 +12,7 @@ import math
 import faulthandler
 import sys
 from logging.handlers import RotatingFileHandler
-from storage import validate_folder, transcript_filter, choose_folder
+from storage import validate_folder, transcript_filter, choose_folder, list_folders
 from archive import Archive, migrate
 from media import MediaService, SegmentRecorder
 from notifications import Notifications
@@ -30,7 +30,7 @@ from aiohttp import web
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA = Path(os.environ.get("LIVE_MONITOR_DATA", str(ROOT / "data")))
 LOG = logging.getLogger("live-monitor")
-RECORDING_DEFAULTS = {'segment_minutes':30,'record_limit_minutes':0,'record_quality':'SD1','convert_mp4':True}
+RECORDING_DEFAULTS = {'segment_minutes':0,'record_limit_minutes':0,'record_quality':'SD1','convert_mp4':True}
 STATUSES = {"live", "offline", "unknown", "blocked", "error"}
 
 
@@ -156,8 +156,7 @@ class Store:
             raise ValueError('录像设置包含不支持的字段')
         for key,value in changes.items():
             if key in {'segment_minutes','record_limit_minutes'}:
-                minimum=1 if key=='segment_minutes' else 0
-                if type(value) is not int or not minimum<=value<=720:raise ValueError('分段需为1—720分钟；总时长需为0—720分钟，0代表不限时。')
+                if type(value) is not int or not 0<=value<=720:raise ValueError('录像时长需为0—720分钟，0代表不限时。')
             elif key=='record_quality':
                 if not isinstance(value,str) or value not in {'ORIGIN','FULL_HD1','HD1','SD1','SD2'}:raise ValueError('请选择有效画质')
             elif type(value) is not bool:raise ValueError('MP4 选项必须为开启或关闭')
@@ -594,6 +593,13 @@ def create_app(data_dir=DEFAULT_DATA, port=18765, collector=None, recorder=None,
         async with picker_lock:
             return web.json_response({'path': await choose_folder()})
 
+    async def browse_folders(request):
+        try:
+            result=await asyncio.wait_for(asyncio.to_thread(list_folders,request.query.get('path')),15)
+        except asyncio.TimeoutError:
+            raise ValueError('读取目录超时，请换一个磁盘或直接填写路径')
+        return web.json_response(result)
+
     async def transcript_days(request):
         room = get_room(request)
         rows = store.db.execute("SELECT date(captured_at,'localtime') AS day, COUNT(*) AS chunks FROM speech_chunks WHERE room_id=? GROUP BY day ORDER BY day DESC", (room['id'],)).fetchall()
@@ -687,6 +693,7 @@ def create_app(data_dir=DEFAULT_DATA, port=18765, collector=None, recorder=None,
     app.router.add_post("/api/recording-settings", recording_settings)
     app.router.add_post("/api/recording-folder", recording_folder)
     app.router.add_post("/api/pick-folder", pick_folder)
+    app.router.add_get("/api/folders", browse_folders)
     app.router.add_get("/api/rooms/{rid}/transcript-days", transcript_days)
     app.router.add_post("/api/rooms/{rid}/save-transcript", transcript_save)
     app.router.add_post("/api/rooms", add)

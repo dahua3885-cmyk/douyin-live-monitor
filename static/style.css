@@ -42,6 +42,10 @@
 #record-settings-description{font-size:12px;margin-top:7px}
 .record-folder-summary{padding:14px 16px;background:var(--soft);border:1px solid var(--border);border-radius:7px;margin-top:20px}
 .record-folder-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
+.folder-browser{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--soft)}
+.folder-browser-nav{display:flex;gap:18px}.folder-browser-list{max-height:210px;overflow:auto;margin:10px 0;border:1px solid var(--border);background:var(--paper);border-radius:4px}
+.folder-browser-item{display:flex;justify-content:space-between;gap:12px;width:100%;padding:10px 12px;border:0;border-bottom:1px solid var(--border);background:transparent;text-align:left;font:inherit;font-size:12px;color:var(--ink);overflow-wrap:anywhere}
+.folder-browser-item:hover,.folder-browser-item:focus-visible{background:var(--green-tint)}.folder-browser-list>p{padding:12px;font-size:12px}#folder-browser-current{overflow-wrap:anywhere;font-size:11px;margin-top:10px}
 .recording-modal #record-folder-label{font-size:11px;line-height:1.65;margin:7px 0 0}
 .recording-modal #record-status{font-size:11px;line-height:1.7;margin:12px 0 20px}
 .recording-modal .record-options{padding:0;background:transparent}

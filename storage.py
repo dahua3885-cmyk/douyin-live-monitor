@@ -68,3 +68,43 @@ try {
         if process.returncode is None:
             process.kill()
             await process.wait()
+
+
+def list_folders(value=None):
+    """Browse local directories in the web UI; no hidden native dialog."""
+    roots=[]
+    if os.name=='nt':
+        import ctypes
+        kernel=ctypes.windll.kernel32
+        for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+            drive=f'{letter}:\\'
+            if kernel.GetDriveTypeW(drive)==3:
+                roots.append({'name':f'{letter}:','path':drive})
+    else:
+        roots=[{'name':'主目录','path':str(Path.home())},{'name':'/','path':'/'}]
+    if not value:
+        return {'path':None,'parent':None,'directories':roots,'roots':roots}
+    if not isinstance(value,str) or len(value)>4096:
+        raise ValueError('文件夹路径无效')
+    folder=Path(value).expanduser()
+    if not folder.is_absolute() or value.startswith(('\\\\','//')):
+        raise ValueError('请选择本机磁盘中的完整文件夹路径')
+    if os.name=='nt' and kernel.GetDriveTypeW(folder.anchor)!=3:
+        raise ValueError('目录浏览目前支持本机固定磁盘；其他位置请直接填写路径')
+    try:
+        folder=folder.resolve(strict=True)
+        if not folder.is_dir():raise ValueError('这个位置不是文件夹')
+        directories=[]
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                try:
+                    if not entry.is_dir(follow_symlinks=False):continue
+                    stat=entry.stat(follow_symlinks=False)
+                    if getattr(stat,'st_file_attributes',0)&(0x2|0x4|0x400):continue
+                    directories.append({'name':entry.name,'path':str(folder/entry.name)})
+                except OSError:continue
+        directories.sort(key=lambda item:item['name'].casefold())
+    except OSError as exc:
+        raise ValueError('无法访问此文件夹，请返回上一级或选择其他位置') from exc
+    parent=str(folder.parent) if folder.parent!=folder else None
+    return {'path':str(folder),'parent':parent,'directories':directories,'roots':roots}

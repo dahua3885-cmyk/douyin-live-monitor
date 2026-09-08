@@ -599,6 +599,7 @@
   function openRecordFolder() {
     $('record-folder-path').value = window.LiveMonitor?.recordingFolderDraft || model.state?.settings?.recordings_dir || '';
     $('record-folder-error').textContent = '';
+    $('folder-browser').hidden=true;
     $('save-record-folder').textContent = $('record-settings-dialog').open ? '使用此文件夹' : '保存文件夹';
     $('record-folder-dialog').showModal();
   }
@@ -608,13 +609,33 @@
     if (!room.record_enabled && !model.state?.settings?.recordings_dir) { window.LiveMonitor.openRecordingSettings(room.id); return; }
     try { await mutate(`/api/rooms/${encodeURIComponent(room.id)}`, {method:'PATCH',body:room.record_enabled ? {record_enabled:false} : {record_enabled:true,enabled:true}}, room.record_enabled ? '已关闭视频录制，已有视频保留。' : '自动录制已开启，收到直播画面后开始保存。', button); } catch (_) { }
   }
-  $('browse-record-folder').addEventListener('click', async () => {
-    const button = $('browse-record-folder'); button.disabled = true;
-    $('record-folder-error').textContent = '请在系统窗口中选择文件夹…';
-    try { const result = await request('/api/pick-folder', {method:'POST',body:{},timeout:190000}); if (result.path) $('record-folder-path').value = result.path; $('record-folder-error').textContent = ''; }
-    catch (error) { $('record-folder-error').textContent = error.message; }
-    finally { button.disabled = false; }
+  let folderBrowserState=null,folderBrowseSequence=0;
+  async function browseFolders(path='') {
+    const sequence=++folderBrowseSequence;
+    $('folder-browser').hidden=false;$('folder-browser-list').textContent='正在读取文件夹…';
+    $('folder-browser-use').disabled=true;$('folder-browser-parent').disabled=true;
+    $('record-folder-error').textContent='';
+    try {
+      const result=await request('/api/folders'+(path?'?path='+encodeURIComponent(path):''),{timeout:20000});
+      if(sequence!==folderBrowseSequence)return;
+      folderBrowserState=result;
+      $('folder-browser-current').textContent=result.path||'选择本机磁盘';
+      $('folder-browser-list').innerHTML=result.directories.map(item=>`<button class="folder-browser-item" type="button" data-folder-path="${escape(item.path)}"><span>${escape(item.name)}</span><span aria-hidden="true">›</span></button>`).join('')||'<p class="muted">这里没有子文件夹，可以选择当前文件夹。</p>';
+      $('folder-browser-use').disabled=!result.path;$('folder-browser-parent').disabled=!result.path;
+    } catch(error) {
+      if(sequence!==folderBrowseSequence)return;
+      $('folder-browser-list').textContent='读取失败，可返回本机磁盘重新选择，或直接填写完整路径。';
+      $('record-folder-error').textContent=error.message;
+    }
+  }
+  $('browse-record-folder').addEventListener('click',()=>browseFolders());
+  $('folder-browser-roots').addEventListener('click',()=>browseFolders());
+  $('folder-browser-parent').addEventListener('click',()=>browseFolders(folderBrowserState?.parent||''));
+  $('folder-browser-list').addEventListener('click',event=>{const button=event.target.closest('[data-folder-path]');if(button)browseFolders(button.dataset.folderPath);});
+  $('folder-browser-use').addEventListener('click',()=>{
+    if(folderBrowserState?.path){$('record-folder-path').value=folderBrowserState.path;$('folder-browser').hidden=true;$('save-record-folder').focus();}
   });
+  $('record-folder-dialog').addEventListener('close',()=>{folderBrowseSequence++;});
   $('record-folder-form').addEventListener('submit', async event => {
     event.preventDefault(); if (!$('record-folder-form').reportValidity()) return;
     const button = $('save-record-folder'); button.disabled = true;

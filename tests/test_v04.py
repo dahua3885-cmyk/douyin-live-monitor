@@ -145,6 +145,9 @@ class FeatureApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(store.rooms(),[]);self.assertEqual(archive.get(sid)['room_id'],one['id'])
 
     async def test_global_recording_settings_work_without_rooms_and_persist_for_new_rooms(self):
+        defaults=await(await self.client.get('/api/recording-settings')).json()
+        self.assertEqual(defaults['segment_minutes'],0)
+        self.assertEqual(defaults['record_limit_minutes'],0)
         desired={'record_quality':'HD1','segment_minutes':60,'record_limit_minutes':180,'convert_mp4':False}
         response=await self.client.post('/api/recording-settings',json=desired)
         self.assertEqual(response.status,200)
@@ -154,14 +157,57 @@ class FeatureApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state['settings']['recording'],desired)
         self.assertFalse(state['rooms'][0]['record_enabled'])
         self.assertEqual((await self.client.patch('/api/rooms/'+room['id'],json={'record_limit_minutes':30})).status,400)
-        for invalid in [{'record_limit_minutes':721},{'convert_mp4':'yes'},{'segment_minutes':0}]:
+        for invalid in [{'record_limit_minutes':721},{'convert_mp4':'yes'},{'segment_minutes':-1}]:
             self.assertEqual((await self.client.post('/api/recording-settings',json=invalid)).status,400)
         self.assertEqual(store.recording_settings(),desired)
         with __import__('contextlib').closing(Store(self.tmp.name)) as reopened:
             self.assertEqual(reopened.recording_settings(),desired)
 
+    async def test_folder_browser_lists_directories_without_native_dialog(self):
+        root=Path(self.tmp.name);(root/'videos').mkdir();(root/'file.txt').write_text('not a folder')
+        response=await self.client.get('/api/folders',params={'path':str(root)})
+        self.assertEqual(response.status,200)
+        data=await response.json()
+        self.assertEqual(data['path'],str(root.resolve()))
+        self.assertIn('videos',[item['name'] for item in data['directories']])
+        self.assertNotIn('file.txt',[item['name'] for item in data['directories']])
+        self.assertEqual((await self.client.get('/api/folders',params={'path':'relative/path'})).status,400)
+        self.assertEqual((await self.client.get('/api/folders',params={'path':'//server/share'})).status,400)
+        self.assertEqual((await self.client.get('/api/folders',params={'path':str(root/'file.txt')})).status,400)
+        disks=await(await self.client.get('/api/folders')).json()
+        self.assertIsNone(disks['path']);self.assertTrue(disks['roots'])
+
+    async def test_unlimited_segment_and_duration_can_be_saved(self):
+        response=await self.client.post('/api/recording-settings',json={'segment_minutes':0,'record_limit_minutes':0})
+        self.assertEqual(response.status,200)
+        self.assertEqual((await response.json())['segment_minutes'],0)
+
 
 class MediaTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unlimited_file_uses_single_ts_and_preserves_optional_total_limit(self):
+        room=self.store.add('https://live.douyin.com/123456789');rid=room['id']
+        self.rec.contexts[rid]=dict(room,broadcast_id='test',segment_minutes=0,remaining_seconds=0)
+        output=self.rec._prepare_output(rid)
+        args=self.rec._ffmpeg_args('ffmpeg','https://cdn.example/live.flv',output)
+        self.assertEqual(output.name,'part-000000.ts')
+        self.assertNotIn('-segment_time',args);self.assertNotIn('-t',args)
+        self.assertEqual(args[args.index('-f')+1],'mpegts')
+        self.rec.contexts[rid]['remaining_seconds']=180*60
+        limited=self.rec._ffmpeg_args('ffmpeg','https://cdn.example/live.flv',output)
+        self.assertEqual(limited[limited.index('-t')+1],'10800')
+        self.rec.contexts[rid]['segment_minutes']=30
+        segmented=self.rec._prepare_output(rid)
+        args=self.rec._ffmpeg_args('ffmpeg','https://cdn.example/live.flv',segmented)
+        self.assertEqual(segmented.name,'part-%06d.ts')
+        self.assertEqual(args[args.index('-segment_time')+1],'1800')
+
+    async def test_completed_unsegmented_file_is_archived_without_recovery_warning(self):
+        folder=Path(self.tmp.name)/'complete';folder.mkdir();video=folder/'part-000000.ts';video.write_bytes(b'fake-video')
+        self.store.db.execute('INSERT INTO recording_runs(id,broadcast_id,room_id,folder,started_at,quality,convert_enabled,closed) VALUES(?,?,?,?,?,?,?,?)',('single','broadcast','room',str(folder),'2026-09-08T00:00:00+00:00','SD1',1,3));self.store.db.commit()
+        with patch.object(self.media,'probe',new_callable=AsyncMock,return_value=({},10)):
+            await self.media.recover_unclosed()
+        row=self.store.db.execute('SELECT * FROM media_assets').fetchone()
+        self.assertEqual(row['duration'],10);self.assertIsNone(row['error']);self.assertEqual(row['state'],'pending')
     async def asyncSetUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.store=Store(self.tmp.name);self.media=MediaService(self.store);self.rec=SegmentRecorder(Path(self.tmp.name),self.store,self.media)
     async def asyncTearDown(self):await self.rec.close();await self.media.close();self.store.close();self.tmp.cleanup()

@@ -99,7 +99,7 @@ class MediaService:
     async def recover_unclosed(self, include_open=False):
         # Runs from a previous service incarnation have no live writer. Probe
         # orphan tails instead of inventing transcript coverage for missing data.
-        for raw in self.db.execute('SELECT * FROM recording_runs WHERE closed=2'+(' OR closed=0' if include_open else '')).fetchall():
+        for raw in self.db.execute('SELECT * FROM recording_runs WHERE closed IN (2,3)'+(' OR closed=0' if include_open else '')).fetchall():
             run=dict(raw);folder=Path(run['folder']);cursor=0.0
             for file in sorted(folder.glob('part-*.ts')):
                 existing=self.db.execute('SELECT duration FROM media_assets WHERE path=?',(str(file.resolve()),)).fetchone()
@@ -107,7 +107,7 @@ class MediaService:
                 try:
                     _,duration=await self.probe(file)
                     self.db.execute('INSERT OR IGNORE INTO media_assets(id,broadcast_id,room_id,path,captured_at,duration,bytes,state,convert_enabled,quality,error) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                        (uuid.uuid4().hex[:24],run['broadcast_id'],run['room_id'],str(file.resolve()),(dt(run['started_at'])+timedelta(seconds=cursor)).isoformat(),duration,file.stat().st_size,'pending' if run['convert_enabled'] else 'saved',run['convert_enabled'],run['quality'],'异常退出后恢复的片段，请复核尾部'))
+                        (uuid.uuid4().hex[:24],run['broadcast_id'],run['room_id'],str(file.resolve()),(dt(run['started_at'])+timedelta(seconds=cursor)).isoformat(),duration,file.stat().st_size,'pending' if run['convert_enabled'] else 'saved',run['convert_enabled'],run['quality'],None if run['closed']==3 else '异常退出后恢复的片段，请复核尾部'))
                     cursor+=duration
                 except Exception:continue
             self.db.execute('UPDATE recording_runs SET closed=1 WHERE id=?',(run['id'],))
@@ -179,10 +179,10 @@ class SegmentRecorder(Recorder):
         folder=(root/f'{name}_{rid}'/f'{dt(stamp).astimezone():%Y-%m-%d}_{sid}'/run_id).resolve()
         if not folder.is_relative_to(root):raise ValueError('录制目录无效')
         folder.mkdir(parents=True,exist_ok=False)
-        meta={'run_id':run_id,'broadcast_id':sid,'room_id':rid,'started_at':stamp,'segment_minutes':room.get('segment_minutes',30)}
+        meta={'run_id':run_id,'broadcast_id':sid,'room_id':rid,'started_at':stamp,'segment_minutes':room.get('segment_minutes',0)}
         (folder/'recording.json').write_text(json.dumps(meta,ensure_ascii=False),encoding='utf-8')
         self.runs[rid]=meta|{'folder':str(folder)}
-        return folder/'part-%06d.ts'
+        return folder/('part-%06d.ts' if room.get('segment_minutes',0) else 'part-000000.ts')
 
     def output_prepared(self,rid,output):
         run=self.runs[rid];room=self.contexts[rid]
@@ -196,8 +196,12 @@ class SegmentRecorder(Recorder):
         args=[ffmpeg,'-hide_banner','-nostats','-loglevel','error','-protocol_whitelist','http,https,tcp,tls,crypto',
             '-rw_timeout','15000000','-i',url,'-map','0:v?','-map','0:a?','-c','copy']
         if room.get('remaining_seconds'):args+=['-t',str(room['remaining_seconds'])]
-        args+=['-f','segment','-segment_format','mpegts','-segment_time',str(room.get('segment_minutes',30)*60),
-            '-reset_timestamps','1','-segment_list',str(output.parent/'segments.csv'),'-segment_list_type','csv','-n',str(output)]
+        minutes=room.get('segment_minutes',0)
+        if minutes:
+            args+=['-f','segment','-segment_format','mpegts','-segment_time',str(minutes*60),
+                '-reset_timestamps','1','-segment_list',str(output.parent/'segments.csv'),'-segment_list_type','csv','-n',str(output)]
+        else:
+            args+=['-f','mpegts','-n',str(output)]
         return tuple(args)
 
     @staticmethod
@@ -260,7 +264,8 @@ class SegmentRecorder(Recorder):
             run=self.runs.get(rid)
             if run:
                 self.media.scan_stamps.clear();self.media.scan()
-                self.store.db.execute('UPDATE recording_runs SET closed=2 WHERE id=?',(run['run_id'],));self.store.db.commit()
+                closed=3 if not error and run.get('segment_minutes',0)==0 else 2
+                self.store.db.execute('UPDATE recording_runs SET closed=? WHERE id=?',(closed,run['run_id']));self.store.db.commit()
                 if error:
                     self.store.db.execute('INSERT INTO archive_gaps(broadcast_id,started_at,ended_at,kind,reason) VALUES(?,?,NULL,?,?)',(run['broadcast_id'],now(),'recording',error));self.store.db.commit()
             self.store.event(rid,'record_error' if error else 'record_stopped',error or '视频录制已停止，已保存的片段正在归档。')
