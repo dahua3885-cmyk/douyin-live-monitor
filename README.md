@@ -5,7 +5,7 @@
 [![Tests](https://github.com/dahua3885-cmyk/douyin-live-monitor/actions/workflows/tests.yml/badge.svg)](https://github.com/dahua3885-cmyk/douyin-live-monitor/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**当前版本：0.4.2 · 源码版 · Windows 10/11 x64**
+**当前版本：0.4.3 · 源码版 · Windows 10/11 x64**
 
 ## 可以做什么
 
@@ -25,6 +25,10 @@
 | 后台运行 | Windows 登录后启动，进程异常退出后尝试恢复；可手动停止或关闭自启 |
 
 结构拆解是**规则辅助草稿**，需要人工复核。转写速度取决于 CPU 和同时转写的直播间数量，30 秒是音频切片时长，不是保证的最终延迟。平台页面或接口变化、登录状态和网络也会影响采集。
+
+## 获取最新版
+
+下载 [v0.4.3 源码 ZIP](https://github.com/dahua3885-cmyk/douyin-live-monitor/archive/refs/tags/v0.4.3.zip)，完整解压后按下方说明安装。已使用 Git 安装的用户，可先停止监控台，再执行 `git pull --ff-only` 后重新启动；保留自己的 `data/`、模型和录像目录。
 
 ## 安装
 

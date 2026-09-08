@@ -470,7 +470,7 @@ def create_app(data_dir=DEFAULT_DATA, port=18765, collector=None, recorder=None,
 
     async def health(request):
         healthy = all(task is None or not task.done() for task in (monitor.task, speech.task, media.task, notifier.task, archive.task))
-        return web.json_response({"app": "dahua-live-monitor", "version": "0.4.2", "time": utcnow(), "pid": os.getpid(), "healthy": healthy}, status=200 if healthy else 503)
+        return web.json_response({"app": "dahua-live-monitor", "version": "0.4.3", "time": utcnow(), "pid": os.getpid(), "healthy": healthy}, status=200 if healthy else 503)
 
     async def shutdown(request):
         if request.query.get("pause") == "1":
