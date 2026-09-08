@@ -115,6 +115,37 @@ class FeatureApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await self.client.post('/api/push/test',json={})).status,200);send.assert_awaited_once()
         self.assertEqual((await self.client.post('/api/push',json={'enabled':True,'webhook':'http://127.0.0.1/','events':['live']})).status,400)
 
+    async def test_open_recordings_uses_persisted_media_after_restart(self):
+        store=self.app['store'];room=store.add('https://live.douyin.com/123456789')
+        folder=Path(self.tmp.name)/'saved-video';folder.mkdir();video=folder/'part-000000.mp4';video.write_bytes(b'video')
+        store.db.execute('INSERT INTO media_assets(id,broadcast_id,room_id,path,mp4_path,captured_at,duration,state) VALUES(?,?,?,?,?,?,?,?)',('saved','broadcast',room['id'],str(video.with_suffix('.ts')),str(video),'2026-09-08T00:00:00+00:00',10,'ready'));store.db.commit()
+        with patch('features.open_directory',return_value=str(folder)) as launch:
+            response=await self.client.post('/api/rooms/'+room['id']+'/open-recordings',json={'path':'C:/not-the-recording'})
+            self.assertEqual(response.status,200);launch.assert_called_once_with(folder.resolve())
+            self.assertTrue((await response.json())['opened'])
+            launch.reset_mock()
+            self.assertEqual((await self.client.post('/api/media/saved/open-folder',json={})).status,200)
+            launch.assert_called_once_with(folder.resolve())
+            launch.reset_mock();video.unlink()
+            self.assertEqual((await self.client.post('/api/media/saved/open-folder',json={})).status,400);launch.assert_not_called()
+            self.assertEqual((await self.client.post('/api/media/missing/open-folder',json={})).status,404)
+
+    async def test_open_recording_run_before_archive_and_handle_no_video(self):
+        store=self.app['store'];room=store.add('https://live.douyin.com/123456789');folder=Path(self.tmp.name)/'current';folder.mkdir()
+        store.db.execute('INSERT INTO recording_runs(id,broadcast_id,room_id,folder,started_at,quality,convert_enabled) VALUES(?,?,?,?,?,?,?)',('active','broadcast',room['id'],str(folder),'2026-09-08T00:00:00+00:00','SD1',1));store.db.commit()
+        with patch('features.open_directory',return_value=str(folder)) as launch:
+            self.assertEqual((await self.client.post('/api/rooms/'+room['id']+'/open-recordings',json={})).status,400);launch.assert_not_called()
+            (folder/'part-000000.ts').write_bytes(b'recording')
+            self.assertEqual((await self.client.post('/api/rooms/'+room['id']+'/open-recordings',json={})).status,200);launch.assert_called_once_with(folder.resolve())
+            self.assertEqual((await self.client.post('/api/rooms/missing/open-recordings',json={})).status,404)
+
+    async def test_open_recording_root_uses_saved_folder_only(self):
+        with patch('features.open_directory',return_value=self.tmp.name) as launch:
+            self.assertEqual((await self.client.post('/api/recordings/open-folder',json={'path':self.tmp.name})).status,400);launch.assert_not_called()
+            self.app['store'].set_setting('recording_dir',self.tmp.name)
+            self.assertEqual((await self.client.post('/api/recordings/open-folder',json={})).status,200)
+            launch.assert_called_once_with(Path(self.tmp.name).resolve())
+
     async def test_ended_broadcast_auto_analyzes_and_notifies_once(self):
         store=self.app['store'];room=store.add('https://live.douyin.com/123456789');archive=Archive(store)
         sid=archive.on_observation(room,{'status':'live','room_id':'p'})

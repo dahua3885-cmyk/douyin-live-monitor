@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from aiohttp import web
 from storage import validate_folder
+from recording_locations import recording_location,open_directory
 
 
 def import_rows(body):
@@ -145,6 +146,11 @@ def register_features(app,store,archive,media,recorder,speech,monitor,notifier,f
         store.db.execute("UPDATE media_assets SET state='pending',error=NULL,convert_enabled=1 WHERE id=? AND state NOT IN ('ready','converting')",(row[0],));store.db.commit()
         return web.json_response({'queued':True})
 
+    async def open_recordings(request):
+        location=recording_location(store,recorder,room_id=request.match_info.get('rid'),media_id=request.match_info.get('mid'))
+        path=await asyncio.to_thread(open_directory,location)
+        return web.json_response({'opened':True,'path':path})
+
     async def push_get(request):return web.json_response(notifier.public())
     async def push_save(request):return web.json_response(notifier.save(await request.json()))
     async def push_test(request):
@@ -162,6 +168,9 @@ def register_features(app,store,archive,media,recorder,speech,monitor,notifier,f
     app.router.add_get('/api/archives/{sid}/analysis.md',analysis_export)
     app.router.add_get('/api/media/{mid}',media_file)
     app.router.add_post('/api/media/{mid}/retry',retry_media)
+    app.router.add_post('/api/media/{mid}/open-folder',open_recordings)
+    app.router.add_post('/api/rooms/{rid}/open-recordings',open_recordings)
+    app.router.add_post('/api/recordings/open-folder',open_recordings)
     app.router.add_get('/api/speech/{cid}/audio',audio_file)
     app.router.add_get('/api/push',push_get)
     app.router.add_post('/api/push',push_save)

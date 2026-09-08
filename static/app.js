@@ -124,7 +124,7 @@
       const id = String(room.id), latest = room.latest || {}, name = roomName(room);
       const title = latest.title || (room.status === 'offline' ? '当前未开播' : '等待获取直播信息');
       const last = room.last_success;
-      return `<tr class="${String(model.selected) === id ? 'selected' : ''}" data-room-id="${escape(id)}" aria-selected="${String(model.selected) === id}"><td class="select-col"><input type="checkbox" data-room-select="${escape(id)}" aria-label="选择 ${escape(name)}" ${selectedRooms.has(id) ? 'checked' : ''}></td><td><div class="account"><span class="account-avatar" aria-hidden="true">${escape(Array.from(name)[0] || '播')}</span><div class="account-info"><button type="button" class="account-name" data-action="select" data-id="${escape(id)}" data-focus-key="select-${escape(id)}" title="查看 ${escape(name)} 的详情">${escape(name)}</button><span class="account-title" title="${escape(title)}">${escape(title)}</span>${room.group_name ? `<small>${escape(room.group_name)}</small>` : ''}</div></div></td><td>${statusBadge(room)}${room.stale ? '<span class="stale-label">数据已过期</span>' : ''}</td><td class="numeric ${room.stale ? 'stale-number' : ''}" title="${isApprox(latest, 'online') ? '约数，按页面显示换算' : '最近成功采集的在线人数'}">${escape(onlineText(latest))}${room.stale && (numeric(latest.online) !== null || latest.online_display) ? '<span class="stale-label">上次数据</span>' : ''}</td><td class="numeric ${room.stale ? 'stale-number' : ''}" title="${isApprox(latest, 'likes') ? '约数，按页面显示换算' : '最近成功采集的累计点赞'}">${formatNumber(latest.likes)}</td><td class="time-cell" title="${escape(fullTime(last))}">${last ? `${day(last)} ${time(last, true)}` : '—'}<small>${room.stale ? '等待新的有效数据' : shortAge(last)}</small></td><td class="centered"><button type="button" class="switch" role="switch" aria-label="监控 ${escape(name)}" aria-checked="${Boolean(room.enabled)}" data-action="toggle" data-id="${escape(id)}" data-focus-key="toggle-${escape(id)}" ${!model.connected ? 'disabled' : ''}></button></td><td class="centered"><button type="button" class="switch" role="switch" aria-label="录像 ${escape(name)}" aria-checked="${Boolean(room.record_enabled)}" data-action="record" data-id="${escape(id)}" ${!model.connected ? 'disabled' : ''}></button><small class="record-cell-state">${!model.connected ? '未连接' : room.record_status?.state==='recording' ? '正在写入' : room.record_status?.state==='limit' ? '已到上限' : room.record_status?.state==='error' ? '录制异常' : room.record_enabled ? '等待音视频' : '未开启'}</small></td><td><div class="row-actions"><button type="button" class="text-button" data-action="refresh" data-id="${escape(id)}" data-focus-key="refresh-${escape(id)}" aria-label="立即刷新 ${escape(name)}" ${!model.connected ? 'disabled' : ''}>刷新</button><button type="button" class="text-button remove-action" data-action="remove" data-id="${escape(id)}" data-focus-key="remove-${escape(id)}" aria-label="移除 ${escape(name)}" ${!model.connected ? 'disabled' : ''}>移除</button></div></td></tr>`;
+      return `<tr class="${String(model.selected) === id ? 'selected' : ''}" data-room-id="${escape(id)}" aria-selected="${String(model.selected) === id}"><td class="select-col"><input type="checkbox" data-room-select="${escape(id)}" aria-label="选择 ${escape(name)}" ${selectedRooms.has(id) ? 'checked' : ''}></td><td><div class="account"><span class="account-avatar" aria-hidden="true">${escape(Array.from(name)[0] || '播')}</span><div class="account-info"><button type="button" class="account-name" data-action="select" data-id="${escape(id)}" data-focus-key="select-${escape(id)}" title="查看 ${escape(name)} 的详情">${escape(name)}</button><span class="account-title" title="${escape(title)}">${escape(title)}</span>${room.group_name ? `<small>${escape(room.group_name)}</small>` : ''}</div></div></td><td>${statusBadge(room)}${room.stale ? '<span class="stale-label">数据已过期</span>' : ''}</td><td class="numeric ${room.stale ? 'stale-number' : ''}" title="${isApprox(latest, 'online') ? '约数，按页面显示换算' : '最近成功采集的在线人数'}">${escape(onlineText(latest))}${room.stale && (numeric(latest.online) !== null || latest.online_display) ? '<span class="stale-label">上次数据</span>' : ''}</td><td class="numeric ${room.stale ? 'stale-number' : ''}" title="${isApprox(latest, 'likes') ? '约数，按页面显示换算' : '最近成功采集的累计点赞'}">${formatNumber(latest.likes)}</td><td class="time-cell" title="${escape(fullTime(last))}">${last ? `${day(last)} ${time(last, true)}` : '—'}<small>${room.stale ? '等待新的有效数据' : shortAge(last)}</small></td><td class="centered"><button type="button" class="switch" role="switch" aria-label="监控 ${escape(name)}" aria-checked="${Boolean(room.enabled)}" data-action="toggle" data-id="${escape(id)}" data-focus-key="toggle-${escape(id)}" ${!model.connected ? 'disabled' : ''}></button></td><td class="centered"><button type="button" class="switch" role="switch" aria-label="录像 ${escape(name)}" aria-checked="${Boolean(room.record_enabled)}" data-action="record" data-id="${escape(id)}" ${!model.connected ? 'disabled' : ''}></button><small class="record-cell-state">${!model.connected ? '未连接' : room.record_status?.state==='recording' ? '正在写入' : room.record_status?.state==='limit' ? '已到上限' : room.record_status?.state==='error' ? '录制异常' : room.record_enabled ? '等待音视频' : '未开启'}</small><button class="text-button record-location-button" type="button" data-action="record-location" data-id="${escape(id)}" aria-label="打开 ${escape(name)} 的录像位置" title="打开最近一次录像所在文件夹" ${!model.connected ? 'disabled' : ''}>打开位置</button></td><td><div class="row-actions"><button type="button" class="text-button" data-action="refresh" data-id="${escape(id)}" data-focus-key="refresh-${escape(id)}" aria-label="立即刷新 ${escape(name)}" ${!model.connected ? 'disabled' : ''}>刷新</button><button type="button" class="text-button remove-action" data-action="remove" data-id="${escape(id)}" data-focus-key="remove-${escape(id)}" aria-label="移除 ${escape(name)}" ${!model.connected ? 'disabled' : ''}>移除</button></div></td></tr>`;
     }).join(''));
   }
   function metric(label, value, primary, note) {
@@ -406,6 +406,7 @@
     const room = roomById(id);
     if (!room) return;
     if (action === 'record') { await toggleRecording(room,button); return; }
+    if (action === 'record-location') { await openRecordingLocation(`/api/rooms/${encodeURIComponent(id)}/open-recordings`,button); return; }
     if (action === 'select') { selectRoom(id); return; }
     if (action === 'remove') {
       model.removeId = id; $('remove-error').hidden = true;
@@ -604,6 +605,13 @@
     $('record-folder-dialog').showModal();
   }
   $('change-record-folder').addEventListener('click', () => openRecordFolder());
+  async function openRecordingLocation(url,button) {
+    button.disabled=true;
+    try { const result=await request(url,{method:'POST',body:{}});toast(`已打开录像文件夹：${result.path}`); }
+    catch(error){toast(error.message,true);}
+    finally{button.disabled=!model.connected;}
+  }
+  $('open-recording-root').addEventListener('click',event=>openRecordingLocation('/api/recordings/open-folder',event.currentTarget));
   async function toggleRecording(room,button) {
     if (!room) return;
     if (!room.record_enabled && !model.state?.settings?.recordings_dir) { window.LiveMonitor.openRecordingSettings(room.id); return; }
@@ -653,7 +661,7 @@
     finally { button.disabled = false; }
   });
 
-  window.LiveMonitor = {model,selectedRooms,request,toast,syncState,roomById,roomName,escape,time,fullTime,downloadText,openRecordFolder,renderRooms};
+  window.LiveMonitor = {model,selectedRooms,request,toast,syncState,roomById,roomName,escape,time,fullTime,downloadText,openRecordFolder,openRecordingLocation,renderRooms};
   let resizeTimer;
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (model.history.length && roomById(model.selected)) renderChart(model.history); }, 150); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncState(); });
