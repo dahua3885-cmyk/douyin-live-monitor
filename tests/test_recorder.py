@@ -182,11 +182,11 @@ class RecorderTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_low_space_stops_active_process(self):
         process = await self._start()
+        watcher = self.recorder._entries[ROOM["id"]].monitor
         with patch.object(self.recorder, "_has_space", AsyncMock(return_value=False)):
-            for _ in range(100):
-                if process.returncode is not None:
-                    break
-                await asyncio.sleep(0.01)
+            # Process exit precedes stderr draining and the final status update.
+            # Wait for the watcher to finish the complete stop operation.
+            await asyncio.wait_for(asyncio.shield(watcher), timeout=5)
         self.assertEqual(process.returncode, 0)
         result = self.recorder.status(ROOM["id"])
         self.assertEqual(result["state"], "error")
