@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>直播监控台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d694b'/%3E%3Cpath d='M16 39v-9m11 15V19m11 20V25m11 9v-9' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+  <script src="/static/features.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#rooms-heading">跳到直播间列表</a>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="直播监控台首页"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>直播监控台</span><span class="local-label">本地版</span></a>
+      <div class="topbar-right"><span class="service-status" id="service-status"><i></i>连接服务中</span><span class="topbar-divider"></span><button class="text-button" id="login-button" type="button">登录抖音</button></div>
+    </header>
+
+    <main>
+      <section class="page-heading" aria-labelledby="page-title">
+        <div><div class="eyebrow">LIVE MONITOR</div><h1 id="page-title">实时监控</h1><p>集中查看开播状态、人数变化与采集提醒。</p></div>
+        <div class="heading-actions"><button class="button secondary" id="pause-all" type="button">全部暂停</button><button class="button secondary" id="start-all" type="button"><span class="play-symbol" aria-hidden="true">▶</span> 全部开始</button><button class="button primary" id="add-room" type="button"><span class="plus-symbol" aria-hidden="true">＋</span>添加直播间</button></div>
+      </section>
+
+      <div class="connection-notice" id="connection-notice" role="alert" hidden></div>
+
+      <section class="overview" aria-label="监控概况">
+        <div class="overview-item"><span class="overview-label">直播间总数</span><strong class="overview-value" id="stat-total">—</strong><span class="overview-caption" id="stat-enabled">等待连接</span></div>
+        <div class="overview-item"><span class="overview-label"><i class="dot green"></i>正在直播</span><strong class="overview-value accent" id="stat-live">—</strong><span class="overview-caption">以最近采集结果为准</span></div>
+        <div class="overview-item"><span class="overview-label">需要关注</span><strong class="overview-value" id="stat-attention">—</strong><span class="overview-caption">采集受限、失败或数据过期</span></div>
+        <div class="overview-item collection-summary"><span class="overview-label">采集状态</span><strong class="overview-text" id="collection-status">等待连接</strong><span class="overview-caption" id="last-sync">尚未同步数据</span></div>
+      </section>
+
+      <section class="panel rooms-panel" aria-labelledby="rooms-heading">
+        <div class="panel-heading"><div class="section-title"><h2 id="rooms-heading" tabindex="-1">直播间</h2><span class="count-tag" id="room-count">0</span></div><span class="muted panel-hint">点击账号，查看实时走势</span></div>
+        <div class="table-wrap" id="rooms-table-wrap" hidden>
+          <table class="rooms-table"><thead><tr><th scope="col" class="select-col"><input id="select-all-rooms" type="checkbox" aria-label="选择全部直播间"></th><th scope="col">账号 / 直播标题</th><th scope="col">开播状态</th><th scope="col" class="numeric">在线人数</th><th scope="col" class="numeric">累计点赞</th><th scope="col">最近成功采集</th><th scope="col" class="centered">监控</th><th scope="col" class="centered">录像</th><th scope="col" class="actions-col">操作</th></tr></thead><tbody id="room-rows"></tbody></table>
+        </div>
+        <div class="empty-state initial-empty" id="rooms-empty">
+          <div class="empty-monitor" aria-hidden="true"><span></span><i></i></div>
+          <h3 id="rooms-empty-title">连接本地服务中</h3><p id="rooms-empty-description">正在读取你的直播间列表。</p><button class="button primary" id="empty-add-room" type="button" hidden>添加第一个直播间 <span aria-hidden="true">↗</span></button>
+        </div>
+        <div class="collection-controls"><div id="selection-actions" hidden><span>已选 <b id="selection-count">0</b> 个</span><button id="bulk-start" class="text-button" type="button">开始监控</button><button id="bulk-pause" class="text-button" type="button">暂停监控</button><button id="bulk-remove" class="text-button" type="button" title="移出采集列表，保留历史资料">移除选中</button><button id="bulk-settings-button" class="text-button" type="button">更多设置</button></div><span id="selection-hint" class="muted">勾选账号，可批量监控、暂停或移除</span><div><button id="archive-button" class="button secondary small" type="button">历史直播 · 搜索话术</button><button id="push-button" class="text-button" type="button">飞书提醒设置</button></div></div>
+        <div id="recording-controls" class="collection-recording"><div class="transcript-top"><div><h3 id="record-heading">全局录像设置</h3><p id="record-status">录制未开启</p></div><span class="muted">所有账号共用，新增账号自动沿用</span></div><p id="record-folder-label" class="muted">首次开启时，必须先选择保存文件夹。</p><button id="change-record-folder" type="button" class="text-button">设置保存文件夹</button></div>
+        <div id="inline-record-options" class="collection-recording record-options"><form id="record-settings-form"><div class="record-options-grid"><label>单个录像文件时长<select id="record-segment"><option value="15">15 分钟</option><option value="30" selected>30 分钟</option><option value="60">60 分钟</option><option value="120">120 分钟</option></select><small>例如 30 分钟存一个文件，所有文件仍归入同一场直播。</small></label><label>每场直播的录制时长上限<select id="record-limit"><option value="0">不限时</option><option value="30">30 分钟</option><option value="60">60 分钟</option><option value="120">120 分钟</option><option value="180">180 分钟（3 小时）</option><option value="240">240 分钟（4 小时）</option><option value="360">360 分钟（6 小时）</option><option value="custom">自定义分钟数</option></select><input id="record-limit-custom" type="number" min="1" max="720" step="1" value="180" aria-label="自定义录制时长（分钟）" hidden disabled><small>不限时：持续录到下播或手动停止。自定义支持 1—720 分钟。</small></label><label>首选清晰度<select id="record-quality"><option value="ORIGIN">原画</option><option value="FULL_HD1">蓝光</option><option value="HD1">超清</option><option value="SD1">高清（推荐）</option><option value="SD2">标清</option></select><small>首选不可用时，优先降档；只有更高画质时使用可用画质。</small></label><label class="checkbox-label"><input id="record-mp4" type="checkbox" checked>片段完成后生成 MP4，保留原 TS</label></div><div class="record-alert-note"><strong>页面异常提示已开启</strong><button type="button" class="text-button notification-button" id="notifications-button">开启桌面提醒</button><span>录制异常会在页面提示；磁盘不足 5 GB 提醒，低于 512 MB 停录。</span></div><p class="muted">画质自动回退已开启。保存后统一用于新启动的录像；时长上限按各账号每场直播分别计算。正在录制的文件沿用启动时参数。</p><p id="record-settings-error" class="form-message error"></p><div class="inline-save"><button class="button primary small" type="submit">保存全局设置</button></div></form></div>
+        <div class="table-footer"><span><i class="dot green hollow"></i> 数据保存在本机</span><span>— 表示暂未获取到该项数据</span></div>
+      </section>
+
+      <div class="workspace-bottom">
+        <section class="panel detail-panel" aria-labelledby="detail-heading">
+          <div class="panel-heading detail-panel-heading"><div class="section-title"><h2 id="detail-heading">直播详情</h2><span id="detail-status"></span></div><div class="detail-links" id="detail-links" hidden><a id="open-room" class="text-button" target="_blank" rel="noopener noreferrer">打开直播间 ↗</a><a id="export-data" class="text-button" download>导出 CSV ↓</a></div></div>
+          <div id="detail-empty" class="empty-state detail-empty"><span class="empty-chart-icon" aria-hidden="true">↗</span><h3>等待第一组真实数据</h3><p>添加直播间并开始监控后，<br>这里会呈现在线人数与直播走势。</p></div>
+          <div id="detail-content" hidden>
+            <div class="detail-identity"><h3 id="selected-name"></h3><p id="selected-title"></p><div class="room-warning" id="room-warning" hidden></div></div>
+            <div class="detail-metrics" id="detail-metrics"></div>
+            <div class="chart-section"><div class="chart-heading"><h3>在线人数走势</h3><div class="chart-range" role="group" aria-label="走势时间范围"><button type="button" data-hours="1">1 小时</button><button type="button" data-hours="6">6 小时</button><button type="button" data-hours="24" class="active" aria-pressed="true">24 小时</button></div></div><div class="chart-host" id="chart-host" aria-live="off"></div><div class="chart-caption"><span><i class="line-key"></i> 实际采集点</span><span id="chart-caption">采集中断时，曲线保留空缺</span></div></div>
+
+            <section class="transcript-panel" aria-labelledby="transcript-heading">
+              <div class="transcript-top"><div><h3 id="transcript-heading">直播话术</h3><p>本地识别 · 约 30 秒一段 · 无 API 费用</p></div><button id="toggle-transcription" class="button secondary small" type="button">开始转写</button></div>
+              <div class="transcript-toolbar"><span id="transcription-status" role="status">转写未开启</span><div><button id="copy-transcript" class="text-button" type="button">复制全文</button><button id="export-transcript" class="text-button" type="button">导出 TXT ↓</button><button id="save-transcript-local" class="text-button" type="button">保存到本机</button><button id="retry-transcript" class="text-button" type="button" hidden>重试失败片段</button></div></div>
+              <div class="transcript-toolbar"><label>历史日期 <select id="transcript-day"><option value="">全部日期</option></select></label><span id="transcript-range" class="muted"></span></div>
+              <p id="export-result" class="muted" role="status" hidden></p>
+              <div id="transcript-error" class="room-warning error" role="alert" hidden></div>
+              <div id="transcript-list" class="transcript-list" aria-live="off"><p class="transcript-empty">开启后，从当前直播开始积累话术记录。</p></div>
+              <button id="transcript-more" type="button" class="text-button" hidden>加载更早话术</button>
+              <p class="transcript-note">按日期查看已保存话术；日期不等于完整直播场次。复制和导出包含所选日期全部记录。自动转写草稿，数字、专有名词和断句请核对。关闭后停止采音，已完成的音频片段会继续转写。</p>
+            </section>
+            <details class="settings" id="room-settings"><summary><span>监控设置</span><span class="settings-summary" id="settings-summary">每 30 秒采集</span><span class="chevron" aria-hidden="true">⌄</span></summary><form id="settings-form"><div class="settings-grid"><label>采集间隔<span class="input-with-unit"><input id="setting-interval" name="interval_seconds" type="number" min="15" max="300" step="1" required value="30"><span>秒</span></span><small>15–300 秒</small></label><label>在线人数高于<input id="setting-above" name="alert_above" type="number" min="0" step="1" placeholder="不设置提醒"><small>超过人数时记录提醒</small></label><label>在线人数低于<input id="setting-below" name="alert_below" type="number" min="0" step="1" placeholder="不设置提醒"><small>低于人数时记录提醒</small></label></div><div class="form-footer"><span class="form-message" id="settings-message" role="status"></span><button class="button primary small" type="submit" id="save-settings">保存设置</button></div></form></details>
+          </div>
+        </section>
+
+        <section class="panel events-panel" aria-labelledby="events-heading"><div class="panel-heading"><div class="section-title"><h2 id="events-heading">动态记录</h2><span class="count-tag" id="event-count">0</span></div></div><div class="events-description">开播、下播、人数提醒与采集异常</div><div id="events-list" class="events-list" role="log" aria-label="监控动态" aria-live="off"></div><div class="events-footer" id="events-footer">所有直播间的最近动态</div></section>
+      </div>
+      <p id="background-status" class="muted">正在读取后台运行设置…</p>
+      <footer class="page-footer"><span>直播监控台 <span class="footer-version">01</span></span><span>保持本地服务运行，监控才会持续。</span></footer>
+    </main>
+  </div>
+
+  <dialog id="add-dialog" class="modal"><form id="add-form"><div class="modal-heading"><div><span class="eyebrow">NEW MONITOR</span><h2>添加直播间</h2></div><button class="icon-button close-dialog" type="button" aria-label="关闭">×</button></div><p class="modal-description">一个入口添加一个或多个账号；多个链接每行一条，会自动跳过重复项。</p><label>直播间 / 主播主页链接（可粘贴多条）<textarea id="room-url" name="url" rows="5" placeholder="https://live.douyin.com/…&#10;https://www.douyin.com/user/…" required autocomplete="off" autofocus></textarea></label><label class="import-file-label">也可从文件导入<input id="add-file" type="file" accept=".json,.csv,.txt"></label><label>备注名称 <span class="optional">添加单个账号时可填</span><input id="room-name" name="name" type="text" maxlength="80" placeholder="方便你识别这个账号" autocomplete="off"></label><p class="input-help">添加后会先检查一次。打开监控开关，按设定间隔持续采集；首次采集完成前显示「待采集」。</p><div class="modal-error" id="add-error" role="alert" hidden></div><div class="modal-actions"><button class="button secondary close-dialog" type="button">取消</button><button id="add-submit" class="button primary" type="submit">添加直播间</button></div></form></dialog>
+  <dialog id="remove-dialog" class="modal compact-modal"><form id="remove-form"><div class="modal-heading"><h2>移除直播间</h2><button class="icon-button close-dialog" type="button" aria-label="关闭">×</button></div><p class="remove-description" id="remove-description"></p><div class="modal-error" id="remove-error" role="alert" hidden></div><div class="modal-actions"><button class="button secondary close-dialog" type="button">取消</button><button id="remove-submit" class="button danger" type="submit">确认移除</button></div></form></dialog>
+  <dialog id="record-folder-dialog" class="modal"><form id="record-folder-form"><div class="modal-heading"><h2>选择视频保存文件夹</h2><button class="icon-button close-dialog" type="button" aria-label="关闭">×</button></div><p>首次录制必须完成此设置。以后沿用这个位置，视频按账号分开保存。</p><label>文件夹完整路径<input id="record-folder-path" type="text" required placeholder="例如 D:\直播录制"></label><button id="browse-record-folder" type="button" class="button secondary">浏览文件夹…</button><p id="record-folder-error" class="form-message error" role="alert"></p><div class="modal-actions"><button class="button secondary close-dialog" type="button">取消</button><button id="save-record-folder" class="button primary" type="submit">保存文件夹</button></div></form></dialog>
+  <dialog id="bulk-settings-dialog" class="modal"><form id="bulk-settings-form"><div class="modal-heading"><h2>批量设置</h2><button type="button" class="icon-button close-dialog">×</button></div><p id="bulk-settings-count"></p><label>监控<select id="bulk-enabled"><option value="">保持原设置</option><option value="true">开启</option><option value="false">暂停</option></select></label><label>录像<select id="bulk-record"><option value="">保持原设置</option><option value="true">开启自动录像（同时开启监控）</option><option value="false">关闭</option></select></label><label>话术转写<select id="bulk-speech"><option value="">保持原设置</option><option value="true">开启（同时开启监控）</option><option value="false">关闭</option></select></label><p class="muted">画质、分段、时长上限统一在全局录像设置中修改。</p><label>分组<input id="bulk-group" type="text" maxlength="50" placeholder="留空保持原设置"></label><p id="bulk-settings-error" class="form-message error"></p><div class="modal-actions"><button type="button" class="button secondary close-dialog">取消</button><button class="button primary" type="submit">应用到勾选账号</button></div></form></dialog>
+  <dialog id="archive-dialog" class="modal archive-modal"><div class="modal-heading"><div><h2>历史直播</h2><p class="muted">查话术、看录像、做拆解</p></div><button type="button" class="icon-button close-dialog" aria-label="关闭档案">×</button></div><div class="archive-layout"><aside><label>账号<select id="archive-room-filter"><option value="">全部账号（含已移除）</option></select></label><button id="archive-refresh" class="text-button" type="button">刷新记录</button><div id="archive-list"></div></aside><section id="archive-detail"><p class="muted">选择一场直播查看资料。</p></section></div></dialog>
+  <dialog id="push-dialog" class="modal"><form id="push-form"><div class="modal-heading"><h2>飞书提醒设置</h2><button type="button" class="icon-button close-dialog">×</button></div><p>填写接收群的自定义机器人地址。保存并开启后，只推送之后发生的已勾选事件。</p><label class="checkbox-label"><input id="push-enabled" type="checkbox">开启飞书推送</label><label>群机器人 Webhook<input id="push-webhook" type="password" autocomplete="new-password" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…"></label><label>签名密钥（机器人启用签名时填写）<input id="push-secret" type="password" autocomplete="new-password" placeholder="已有配置时留空保持"></label><label class="checkbox-label"><input id="push-clear-secret" type="checkbox">清除已保存签名密钥</label><div id="push-events" class="push-events"></div><p id="push-message" class="form-message"></p><div class="modal-actions"><button id="push-test" type="button" class="button secondary">向已保存的群发送测试</button><button class="button primary" type="submit">保存设置</button></div><div id="push-logs" class="push-logs"></div></form></dialog>
+  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
+</body>
+</html>
