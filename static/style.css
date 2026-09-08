@@ -35,3 +35,25 @@
 @media(max-width:900px){.record-options-grid{grid-template-columns:1fr 1fr}.record-options-grid>label.checkbox-label{padding-top:25px}.archive-tabs button{padding:10px 12px}}@media(max-width:600px){.record-options-grid{grid-template-columns:1fr}.record-options-grid>label.checkbox-label{padding-top:0}.archive-tabs{gap:0}.archive-tabs button{padding:10px 9px}.archive-search{position:static}}
 
 #record-limit-custom,#bulk-limit-custom{width:100%;padding:9px;border:1px solid var(--border);border-radius:5px;font:inherit;font-weight:400;background:var(--paper)}
+
+/* Global recording preferences open on demand from the collection toolbar. */
+.recording-modal{width:min(640px,calc(100% - 32px));padding:24px;max-height:calc(100dvh - 40px)}
+.recording-modal .modal-heading h2{margin:0;font-size:20px}
+#record-settings-description{font-size:12px;margin-top:7px}
+.record-folder-summary{padding:14px 16px;background:var(--soft);border:1px solid var(--border);border-radius:7px;margin-top:20px}
+.record-folder-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
+.recording-modal #record-folder-label{font-size:11px;line-height:1.65;margin:7px 0 0}
+.recording-modal #record-status{font-size:11px;line-height:1.7;margin:12px 0 20px}
+.recording-modal .record-options{padding:0;background:transparent}
+.recording-modal .record-options-grid{grid-template-columns:1fr 1fr;gap:20px}
+.recording-modal .record-options-grid>label{margin:0;line-height:1.6}
+.recording-modal .record-options-grid select{margin-top:0;min-height:39px}
+.recording-modal .record-options-grid small{font-size:11px;line-height:1.6}
+.recording-modal .record-options-grid>.checkbox-label{padding-top:25px;align-items:flex-start;line-height:1.8}
+.recording-modal .checkbox-label input{width:14px;height:14px;margin:3px 0 0;padding:0;flex-shrink:0}
+.recording-modal .record-alert-note{padding-top:16px;margin-top:20px;border-top:1px solid var(--border);gap:8px 12px;line-height:1.7}
+.recording-modal .record-alert-note span{flex-basis:100%}
+.recording-modal .record-options form>p.muted{font-size:11px;line-height:1.7}
+.recording-modal .form-message{font-size:12px;margin-top:12px;line-height:1.6}
+.recording-modal .modal-actions{border-top:1px solid var(--border);padding-top:16px;margin-top:20px}
+@media(max-width:540px){.recording-modal{padding:20px;width:calc(100% - 24px);max-height:calc(100dvh - 24px)}.recording-modal .record-options-grid{grid-template-columns:1fr;gap:16px}.recording-modal .record-options-grid>.checkbox-label{padding-top:0}.record-folder-heading{align-items:flex-start;flex-wrap:wrap}}

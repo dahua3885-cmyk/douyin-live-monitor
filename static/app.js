@@ -136,7 +136,7 @@
     const writing=rooms.filter(r=>r.record_status?.state==='recording').length;
     const failures=rooms.filter(r=>r.record_enabled&&r.record_status?.error).length;
     $('record-heading').textContent='全局录像设置';
-    $('record-status').textContent=!model.connected?'服务未连接，暂时无法保存设置。':`已开启录像 ${enabled} 个账号 · 正在录制 ${writing} 个${failures?' · 异常 '+failures+' 个':''}。是否录像由上方各账号的开关控制。`;
+    $('record-status').textContent=!model.connected?'服务未连接，暂时无法保存设置。':`已开启录像 ${enabled} 个账号 · 正在录制 ${writing} 个${failures?' · 异常 '+failures+' 个':''}。在直播间列表中单独开关录像。`;
     $('change-record-folder').disabled=!model.connected;
     $('record-folder-label').textContent=model.state?.settings?.recordings_dir?`统一保存到：${model.state.settings.recordings_dir}`:'首次录制前选择一次保存文件夹，所有账号共用。';
     const save=$('record-settings-form').querySelector('button[type="submit"]');save.disabled=!model.connected||$('record-settings-form').dataset.saving==='true';

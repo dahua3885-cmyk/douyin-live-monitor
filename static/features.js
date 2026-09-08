@@ -37,12 +37,18 @@
     $('record-mp4').checked=r.convert_mp4;$('record-settings-error').textContent='';
   }
   window.addEventListener('live-monitor-settings',renderInlineSettings);renderInlineSettings();
+  $('record-settings-button').addEventListener('click',()=>{
+    renderInlineSettings();$('record-settings-dialog').showModal();
+  });
+  $('record-settings-dialog').addEventListener('close',()=>{
+    $('record-settings-form').dataset.dirty='false';settingsKey='';renderInlineSettings();
+  });
   $('record-settings-form').addEventListener('input',()=>{$('record-settings-form').dataset.dirty='true';$('record-settings-error').textContent='有未保存的修改';});
   $('record-settings-form').addEventListener('submit',async event=>{
     event.preventDefault();const button=event.submitter;button.disabled=true;$('record-settings-form').dataset.saving='true';
     try{
       await L.request('/api/recording-settings',{method:'POST',body:{segment_minutes:Number($('record-segment').value),record_limit_minutes:limitMinutes('record-limit'),record_quality:$('record-quality').value,convert_mp4:$('record-mp4').checked}});
-      $('record-settings-form').dataset.dirty='false';settingsKey='';await L.syncState();L.toast('全局录像设置已保存，所有账号新启动的录像统一使用。');
+      $('record-settings-form').dataset.dirty='false';settingsKey='';await L.syncState();$('record-settings-dialog').close();L.toast('全局录像设置已保存，所有账号新启动的录像统一使用。');
     }catch(error){$('record-settings-error').textContent=error.message;}finally{$('record-settings-form').dataset.saving='false';button.disabled=!L.model.connected;}
   });
   $('add-file').addEventListener('change',async()=>{const file=$('add-file').files[0];if(file){if(file.size>200000){L.toast('文件超过 200 KB',true);return;}$('room-url').value=await file.text();}});
