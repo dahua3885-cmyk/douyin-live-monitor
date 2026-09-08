@@ -148,8 +148,8 @@ def register_features(app,store,archive,media,recorder,speech,monitor,notifier,f
 
     async def open_recordings(request):
         location=recording_location(store,recorder,room_id=request.match_info.get('rid'),media_id=request.match_info.get('mid'))
-        path=await asyncio.to_thread(open_directory,location)
-        return web.json_response({'opened':True,'path':path})
+        result=await asyncio.to_thread(open_directory,location)
+        return web.json_response({'opened':True,**(result if isinstance(result,dict) else {'path':result})})
 
     async def push_get(request):return web.json_response(notifier.public())
     async def push_save(request):return web.json_response(notifier.save(await request.json()))

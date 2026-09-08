@@ -30,6 +30,8 @@ class MediaService:
     def __init__(self,store):
         self.store,self.db=store,store.db
         self.db.execute('CREATE TABLE IF NOT EXISTS recording_runs (id TEXT PRIMARY KEY,broadcast_id TEXT,room_id TEXT,folder TEXT,started_at TEXT,quality TEXT,convert_enabled INTEGER,closed INTEGER DEFAULT 0)')
+        if 'output_folder' not in {row[1] for row in self.db.execute('PRAGMA table_info(recording_runs)')}:
+            self.db.execute('ALTER TABLE recording_runs ADD COLUMN output_folder TEXT')
         self.db.execute("UPDATE media_assets SET state='pending' WHERE state='converting'")
         self.db.commit()
         self.task=None;self.closed=False;self.process=None;self.scan_stamps={}
@@ -74,7 +76,10 @@ class MediaService:
         return info,duration
 
     async def convert(self,row):
-        source=Path(row['path']);target=source.with_suffix('.mp4');temporary=source.with_suffix('.converting.mp4')
+        source=Path(row['path'])
+        run=self.db.execute('SELECT output_folder FROM recording_runs WHERE folder=?',(str(source.parent),)).fetchone()
+        target=Path(row['mp4_path']) if row.get('mp4_path') else (Path(run[0])/source.with_suffix('.mp4').name if run and run[0] else source.with_suffix('.mp4'))
+        temporary=target.with_suffix('.converting.mp4')
         self.db.execute("UPDATE media_assets SET state='converting',error=NULL WHERE id=?",(row['id'],));self.db.commit()
         try:
             _,source_duration=await self.probe(source)
@@ -119,7 +124,10 @@ class MediaService:
             await self.recover_unclosed()
             row=self.db.execute("SELECT * FROM media_assets WHERE state='pending' ORDER BY captured_at LIMIT 1").fetchone()
             if row:await self.convert(dict(row))
-            else:await asyncio.sleep(1)
+            else:
+                from media_cleanup import clean_ready_runs
+                await clean_ready_runs(self)
+                await asyncio.sleep(1)
 
     async def close(self):
         self.closed=True

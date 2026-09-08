@@ -607,7 +607,7 @@
   $('change-record-folder').addEventListener('click', () => openRecordFolder());
   async function openRecordingLocation(url,button) {
     button.disabled=true;
-    try { const result=await request(url,{method:'POST',body:{}});toast(`已打开录像文件夹：${result.path}`); }
+    try { const result=await request(url,{method:'POST',body:{},timeout:20000});toast(result.foreground===false?`文件夹已打开，请在任务栏查看资源管理器：${result.path}`:`已打开录像文件夹：${result.path}`); }
     catch(error){toast(error.message,true);}
     finally{button.disabled=!model.connected;}
   }

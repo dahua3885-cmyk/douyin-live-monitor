@@ -27,7 +27,7 @@ def recording_location(store,recorder,room_id=None,media_id=None):
         file=video_in(run['folder'])
         if file:return file.resolve().parent
     # Runs cover actively written TS files that have not entered the archive yet.
-    locations=[(row['started_at'],row['folder'],True) for row in store.db.execute('SELECT started_at,folder FROM recording_runs WHERE room_id=? ORDER BY started_at DESC LIMIT 100',(room_id,))]
+    locations=[(row['started_at'],row['folder'],True) for row in store.db.execute('SELECT started_at,COALESCE(output_folder,folder) AS folder FROM recording_runs WHERE room_id=? ORDER BY started_at DESC LIMIT 100',(room_id,))]
     for row in store.db.execute('SELECT captured_at,path,mp4_path FROM media_assets WHERE room_id=? ORDER BY captured_at DESC LIMIT 100',(room_id,)):
         locations.extend((row['captured_at'],value,False) for value in (row['mp4_path'],row['path']) if value)
     for _,value,is_folder in sorted(locations,key=lambda item:item[0],reverse=True):
@@ -42,5 +42,10 @@ def open_directory(folder):
     if os.name!='nt':raise ValueError(f'请在文件管理器中打开：{folder}')
     # Only a directory resolved from saved application records is opened.
     # Never pass an executable or user-supplied command to the shell.
-    os.startfile(str(folder),'explore')
-    return str(folder)
+    import json
+    import subprocess
+    script=Path(__file__).with_name('open-recording-folder.ps1')
+    result=subprocess.run(['powershell.exe','-NoProfile','-STA','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',str(script),'-Folder',str(folder)],capture_output=True,text=True,encoding='utf-8-sig',timeout=15,creationflags=subprocess.CREATE_NO_WINDOW)
+    if result.returncode:raise ValueError('无法打开录像文件夹，请稍后重试')
+    info=json.loads(result.stdout)
+    return {'path':str(folder),'foreground':bool(info.get('foreground'))}
